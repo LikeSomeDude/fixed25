@@ -8,6 +8,36 @@ class Fixed {
     unsigned int integer;
     char digits[MAX_DIGITS];
 
+    void normalize() {
+        if (integer == 0 && sign < 0) {
+            bool isZero = true;
+            for (int i = 0; i < MAX_DIGITS; ++i){
+                if (digits[i] != 0){
+                    isZero = false;
+                    break;
+                }
+            }
+            if (isZero){
+                sign = 1;
+            }
+        }
+    }
+
+    Fixed& minus_min_abs(const Fixed& other){
+        char carry = 0;
+        for (int i = MAX_DIGITS - 1; i >= 0; --i){
+            digits[i] -= other.digits[i] + carry;
+            if (digits[i] <0){
+                digits[i] += 10;
+                carry = 1;
+            } else{
+                carry = 0;
+            }
+        }
+        integer -= other.integer + carry;
+        return *this;
+    }
+
 public:
     Fixed(): sign(1), integer(0){
         for (int i = 0; i < MAX_DIGITS; i++) {
@@ -47,8 +77,39 @@ public:
             digits[i] = static_cast<char>(intnum);
             num -= intnum;
         }
+        normalize();
     }
-   // Fixed(char const str[]);
+    Fixed(char const str[]) : sign(1), integer(0){
+        int index = 0;
+        while (str[index] == ' ') ++index;
+        if (str[index] == '-'){
+            sign = -1;
+            ++index;
+        } 
+        while (str[index] != '\0' && str[index] != '.'){
+            if (!isdigit(str[index]))
+                throw "wrong format";
+            integer = integer * 10 + (str[index] - '0');
+            ++index;
+        }
+        if (str[index] == '.'){
+            ++index;
+        }
+        for (int i = 0; i < MAX_DIGITS; ++i){
+            digits[i] = 0;
+        }
+        int i = 0; 
+        while (str[index] != '\0' && i < MAX_DIGITS){
+            if (!isdigit(str[index]))
+                throw "wrong format";
+            digits[i] = str[index] - '0';
+            ++index;
+            ++i;
+        }
+        normalize();
+    }
+
+    friend class Fixed;
 
     template<int XXX>
     Fixed(const Fixed<XXX>& other) : sign(other.sign), integer(other.integer) {
@@ -74,8 +135,38 @@ public:
         return result;
     }
 
-    Fixed& operator+= (const Fixed&) {
+    Fixed& operator+= (const Fixed& other) {
+        if (sign == other.sign){
+            char carry = 0;
+            for (int i = MAX_DIGITS - 1; i >= 0; --i){
+                digits[i] += other.digits[i] + carry;
+                if (digits[i] > 9){
+                    digits[i] -= 10;
+                    carry = 1;
+                } else{
+                    carry = 0;
+                }
+            }
+        integer += other.integer + carry;
+        } else{
+            if (this->abs() >= other.abs()){
+                minus_min_abs(other);
+            } else{
+                Fixed tmp(other);
+                *this = tmp.minus_min_abs(*this);
+            }
+        }
+        normalize();
         return *this;
+    }
+
+    Fixed& operator-= (const Fixed& other) {
+        *this += -other;
+        return *this;
+    }
+
+    Fixed abs() const{
+        return sign < 0 ? -*this : *this;
     }
 
     bool is_equal(const Fixed& other) const { 
@@ -92,8 +183,9 @@ public:
     }
 
     Fixed operator-() const{
-        Fixed reault(*this);
+        Fixed result(*this);
         result.sign = -result.sign;
+        result.normalize();
         return result;
     }
 
@@ -101,7 +193,7 @@ public:
         if(sign < other.sign){return true;}
         if(other.sign < sign){return false;}
         if(sign<0){
-            return (-other)is_less(-(*this));
+            return (-other).is_less(-(*this));
         }
         if(integer < other.integer){return true;}
         if(other.integer < integer){return false;}
@@ -114,23 +206,32 @@ public:
 };
 
 template <int DIGITS1, int DIGITS2>
-Fixed<((DIGITS1<DIGITS2) ? DIGITS2 : DIGITS1)> operator+(const Fixed<DIGITS1>& left, const Fixed<DIGITS2>& right){
+Fixed<((DIGITS1<DIGITS2) ? DIGITS2 : DIGITS1)> 
+    operator+(const Fixed<DIGITS1>& left, const Fixed<DIGITS2>& right){
     if (DIGITS1 < DIGITS2) {
         Fixed<DIGITS2> result(left);
         result += right;
         return result;
     } else {
-        FIxed<DIGITS1> result(left);
+        Fixed<DIGITS1> result(left);
         result += Fixed<DIGITS1>(right);
         return result;
     }
 };
 
-//template<int DIGITS1, int DIGITS2>
-//Fixed<((DIGITS1<DIGITS2) ? DIGITS2 : DIGITS1)> operator-(const Fixed<DIGITS1>&, const Fixed<DIGITS2>&);
-//
-//template <int DIGITS1, int DIGITS2>
-//Fixed<((DIGITS1 < DIGITS2) ? DIGITS2 : DIGITS1)> operator*(const Fixed<DIGITS1>&, const Fixed<DIGITS2>&);
+template<int DIGITS1, int DIGITS2>
+Fixed<((DIGITS1<DIGITS2) ? DIGITS2 : DIGITS1)>    
+    operator-(const Fixed<DIGITS1>& left, const Fixed<DIGITS2>& right) {
+    return left+(-right);
+}
+
+template <int DIGITS1, int DIGITS2>
+Fixed<((DIGITS1 < DIGITS2) ? DIGITS2 : DIGITS1)> 
+    operator*(const Fixed<DIGITS1>& left, const Fixed<DIGITS2>& right) {
+        char carry = 0;
+        Fixed<DIGITS1> result(left);
+        result.integer = left.integer * right.integer + carry
+}
 
 template <int MAX_DIGITS>
 bool operator<(const Fixed<MAX_DIGITS>& left, const Fixed<MAX_DIGITS>& right){
@@ -158,7 +259,7 @@ bool operator==(const Fixed<MAX_DIGITS>& left, const Fixed<MAX_DIGITS>& right){
 };
 
 template <int MAX_DIGITS>
-bool operator!=(const Fixed<MAX_DIGITS>&, const Fixed<MAX_DIGITS>&){
+bool operator!=(const Fixed<MAX_DIGITS>& left, const Fixed<MAX_DIGITS>& right){
     return !(left==right);
 };
 
